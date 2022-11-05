@@ -1,0 +1,114 @@
+---
+ 
+ - hosts: all
+   become: true
+   pre_tasks:
+ 
+   - name: update repo cache (Ubuntu)
+     tags: always
+     apt:
+       update_cache: yes
+     changed_when: false
+     when: ansible_distribution == "Ubuntu"
+
+   - name: create aleksej user
+     tags: always
+     user:
+       name: aleksej
+       groups: root
+
+ - hosts: all
+   become: true
+   tasks: 
+     
+   - name: add ssh key for aleksej
+     tags: always
+     authorized_key:
+       user: aleksej
+       key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCfWVyLEJg/KmJXYETWUWqllQ/YW2QwuVhb6gLI25nOYbqZhrFwz01OEfS2iMQ3vNlv1YOym7248vNvMi6v250B14CumVNUFDujVxgOoED4ZQt24b7DZx5+TGzYl3yEPttkMxY65HybD01hxI4nMkPDLmecBRiS9eEl03pxP9e5Zc43Mit6YfB2rdofSfkxt0ccTTHpm2VWML0OGKSnhGqfOw8Zod3jXicxUf/cgnGxcDKxbSHBVRnzrDNhk25FuYLDFu+CY9eC9IhxjY318+pwWTdTpjlIHxKkLzU6WMi3L7tydB2WJtyppcVWAaCv6yl15pJyh1JO9CcgHkVe+qOKDdc76546k2UAfpAYkvYR2H+ic/7VFFatoZKB95itaiARyxD3cwtd2sHQZkUFwR8u8sFO3Pr5WMidUi3AQFVtOVkzTQwgLMhLsRtwGc8GRGwuk/Ox/1iyHpqQF79m3QqYJ315ZNMvMnyRV9X3zZ5uD3f5UM4tBDDQmhMZDsVazfJPSIvXFPMa/2GD1Pu951NeybBM/9CuPgOJkC5RJVYxj+Es90ossKZ8RfAw5/1bGsPcUIdCj19eXyDHKgyVdRxlMPPjI2bH/MBLiFkmwoaBlT6bJvVHIXe5PcyXIzkzyWiGflPSlbIS3+NEJIuxz+Wr0AcCe/YvbCKTQALlwJKUHQ== ansible"
+
+   - name: add sudoers file for aleksej
+     tags: always
+     copy:
+       src: sudoer_aleksej
+       dest: /etc/sudoers.d/aleksej
+       owner: root
+       group: root
+       mode: 0440
+
+ - hosts: workstations
+   become: true
+   tasks:
+ 
+   - name: install unzip
+     package:
+       name: unzip
+ 
+   - name: install terraform
+     unarchive:
+       src: https://releases.hashicorp.com/terraform/0.12.28/terraform_0.12.28_linux_amd64.zip
+       dest: /usr/local/bin
+       remote_src: yes
+       mode: 0755
+       owner: root
+       group: root
+ 
+ - hosts: web_servers
+   become: true
+   tasks:
+ 
+   - name: install apache2 package (Ubuntu)
+     tags: apache,apache2,ubuntu
+     apt:
+       name:
+         - apache2
+         - libapache2-mod-php
+       state: latest
+     when: ansible_distribution == "Ubuntu"
+ 
+   - name: change e-mail address for admin
+     tags: apache2,ubuntu
+     lineinfile:
+       path: /etc/apache2/apache2.conf
+       regexp: '^ServerAdmin'
+       line: ServerAdmin somebody@somewhere.net
+     when: ansible_distribution == "Ubuntu"
+     register: apache2
+  
+   - name: restart apache2 (Ubuntu)
+     tags: apache2,ubuntu
+     service:
+       name: apache2
+       state: restarted
+     when: apache2.changed    
+ 
+   - name: copy html file for site
+     tags: apache,apache,apache2,httpd
+     copy:
+       src: default_site.html
+       dest: /var/www/html/index.html
+       owner: root
+       group: root
+       mode: 0644
+ 
+ - hosts: db_servers
+   become: true
+   tasks:
+ 
+   - name: install mariadb server
+     tags: db,mariadb,ubuntu
+     apt:
+       name: mariadb-server
+       state: latest
+     when: ansible_distribution == "Ubuntu"
+ 
+ - hosts: file_servers
+   tags: samba
+   become: true
+   tasks:
+ 
+   - name: install samba package
+     tags: samba
+     package:
+       name: samba
+       state: latest
